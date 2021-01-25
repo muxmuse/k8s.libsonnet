@@ -217,21 +217,8 @@ local kaniko = {
 // NETWORK
 // ---------------------------------------------------------------------------
 local network = {
-  ingressRuleFirstPort:: function(hostname, service) {
-    host: hostname,
-    http+: {
-      paths+: [{
-        path: '/',
-        backend: {
-          serviceName: service.metadata.name,
-          servicePort: service.spec.ports[0].port,
-        }
-      }]
-    }
-  },
-
-  v1beta1:: {
-    local r(kind, namespace, name) = k8s.r('networking.k8s.io/v1beta1', 
+  v1:: {
+    local r(kind, namespace, name) = k8s.r('networking.k8s.io/v1', 
       kind, namespace, name),  
 
     ingress:: function(namespace, name, hostname, clusterIssuerName) r('Ingress', namespace, name) + {
@@ -249,7 +236,23 @@ local network = {
         }],
         rules: [],
       },
-    }
+    },
+    
+    ingressRuleFirstPort:: function(hostname, service) {
+      host: hostname,
+      http+: {
+        paths+: [{
+          path: '/',
+          pathType: 'Prefix',
+          backend: {
+            service: {
+              name: service.metadata.name,
+              port: { number: service.spec.ports[0].port },
+            }
+          }
+        }]
+      }
+    },
   }
 };
 
@@ -295,7 +298,7 @@ local network = {
   # hashedConfigMap:: hashedConfigMap,
   # job:: job,
   
-  version:: '0.4.0',
+  version:: '0.5.0',
 }
 
 // ===========================================================================
