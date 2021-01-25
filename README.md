@@ -8,10 +8,10 @@ Save the library locally.
 
 ``` bash
 # Version 0.5.0
-wget https://raw.githubusercontent.com/muxmuse/k8s.jsonnet/0.5.0/k8s.libsonnet
+wget https://raw.githubusercontent.com/muxmuse/k8s.libsonnet/0.5.0/k8s.libsonnet
 
 # Latest
-wget https://raw.githubusercontent.com/muxmuse/k8s.jsonnet/main/k8s.libsonnet
+wget https://raw.githubusercontent.com/muxmuse/k8s.libsonnet/main/k8s.libsonnet
 ```
 
 Then use it like so:
