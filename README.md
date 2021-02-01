@@ -52,3 +52,13 @@ local k8s = import './k8s.libsonnet';
   },
 }
 ```
+
+## API Documentation
+
+### Append a hash to the name of a k8s object.
+
+Updating ConfigMaps or Secrets without changing their name will not restart dependend deployments. `withHashPostfixedName` appends the hash of the content of a given field to the name of the k8s object.
+
+``` jsonnet
+{ data: 'my-data' } + k8s.withHashPostfixedName(field='data')
+```

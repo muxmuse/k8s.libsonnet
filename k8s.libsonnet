@@ -98,6 +98,13 @@ local _std = {
     else reducer(initial, array[0]),
 };
 
+local withHashPostfixedName(field='data') = {
+  local name = super.metadata.name  + '-' + std.md5(std.toString(super[field])),
+  metadata+: {
+    name: name
+  }
+};
+
 
 // ===========================================================================
 // KUBERNETES
@@ -138,7 +145,6 @@ local k8s = {
     },
   }
 };
-
 
 // ===========================================================================
 // KUBERNETES / APPS
@@ -298,6 +304,7 @@ local network = {
   environmentVariablesFromConfigMap:: environmentVariablesFromConfigMap,
   environmentVariablesFromSealedSecret:: environmentVariablesFromSealedSecret,
   nameValuePairsFromDotEnv:: nameValuePairsFromDotEnv,
+  withHashPostfixedName:: withHashPostfixedName,
 
   std:: _std,  
   
@@ -330,7 +337,7 @@ local network = {
   # hashedConfigMap:: hashedConfigMap,
   # job:: job,
   
-  version:: '0.5.0',
+  version:: '0.5.1',
 }
 
 // ===========================================================================
