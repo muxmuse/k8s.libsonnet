@@ -7,8 +7,8 @@ Building blocks for kubernetes resource descriptions based on jsonnet.
 Save the library locally.
 
 ``` bash
-# Version 0.5.1
-wget https://raw.githubusercontent.com/muxmuse/k8s.libsonnet/0.5.1/k8s.libsonnet
+# Version 0.5.2
+wget https://raw.githubusercontent.com/muxmuse/k8s.libsonnet/0.5.2/k8s.libsonnet
 
 # Latest
 wget https://raw.githubusercontent.com/muxmuse/k8s.libsonnet/main/k8s.libsonnet
