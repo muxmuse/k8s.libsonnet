@@ -58,6 +58,13 @@ local volumeFromSealedSecret(name, sealedSecret) = {
   }
 };
 
+local volumeFromConfigMap(name, configMap) = {
+  name: name,
+  configMap: {
+    name: configMap.metadata.name,
+  },
+};
+
 local environmentVariablesFromSealedSecret(sealedSecret, names = null) = [
   {
     name: key,
@@ -171,6 +178,18 @@ local apps_v1 = {
       },
     },
   },
+
+  resources:: function(memoryLimit = null, cpuLimit = null, 
+    memoryRequest = memoryLimit, cpuRequest = cpuLimit) {
+    limits: {
+      [if memoryLimit != null then 'memory'] : memoryLimit,
+      [if cpuLimit != null then 'cpu'] : cpuLimit,
+    },
+    requests: {
+      [if memoryRequest != null then 'memory'] : memoryRequest,
+      [if cpuRequest != null then 'cpu'] : cpuRequest,
+    },
+  }
 };
 
 
@@ -255,26 +274,29 @@ local kaniko = {
 // NETWORK
 // ---------------------------------------------------------------------------
 local network = {
+  local ingress = function(name, hostname, clusterIssuerName) {
+    metadata+: {
+      annotations+: {
+        'kubernetes.io/ingress.class': 'nginx',
+        # 'nginx.ingress.kubernetes.io/rewrite-target': '/',
+        'cert-manager.io/cluster-issuer': clusterIssuerName,
+      }
+    },
+    spec: {
+      [if clusterIssuerName != null then 'tls']+: [{
+        hosts: [ hostname ],
+        secretName: 'tls-' + name,
+      }],
+      rules: [],
+    },
+  },
+
   v1:: {
     local r(kind, namespace, name) = k8s.r('networking.k8s.io/v1', 
       kind, namespace, name),  
 
-    ingress:: function(namespace, name, hostname, clusterIssuerName) r('Ingress', namespace, name) + {
-      metadata+: {
-        annotations+: {
-          'kubernetes.io/ingress.class': 'nginx',
-          # 'nginx.ingress.kubernetes.io/rewrite-target': '/',
-          'cert-manager.io/cluster-issuer': clusterIssuerName,
-        }
-      },
-      spec: {
-        [if clusterIssuerName != null then 'tls']+: [{
-          hosts: [ hostname ],
-          secretName: 'tls-' + name,
-        }],
-        rules: [],
-      },
-    },
+    ingress:: function(namespace, name, hostname, clusterIssuerName) r(
+      'Ingress', namespace, name) + ingress(name, hostname, clusterIssuerName),
     
     ingressRuleFirstPort:: function(hostname, service) {
       host: hostname,
@@ -291,6 +313,27 @@ local network = {
         }]
       }
     },
+  },
+
+  v1beta1:: {
+    local r(kind, namespace, name) = _r('v1beta1', kind, namespace, name),
+    r:: r,
+
+    ingress:: function(namespace, name, hostname, clusterIssuerName) r(
+      'Ingress', namespace, name) + ingress(name, hostname, clusterIssuerName),
+
+    ingressRuleFirstPort:: function(hostname, service) {
+      host: hostname,
+      http+: {
+        paths+: [{
+          path: '/',
+          backend: {
+            serviceName: service.metadata.name,
+            servicePort: service.spec.ports[0].port,
+          }
+        }]
+      }
+    },
   }
 };
 
@@ -301,6 +344,7 @@ local network = {
   namespaceFrom:: namespaceFrom,
   nameFrom:: nameFrom,
   volumeFromSealedSecret:: volumeFromSealedSecret,
+  volumeFromConfigMap:: volumeFromConfigMap,
   environmentVariablesFromConfigMap:: environmentVariablesFromConfigMap,
   environmentVariablesFromSealedSecret:: environmentVariablesFromSealedSecret,
   nameValuePairsFromDotEnv:: nameValuePairsFromDotEnv,
@@ -337,7 +381,7 @@ local network = {
   # hashedConfigMap:: hashedConfigMap,
   # job:: job,
   
-  version:: '0.5.1',
+  version:: '0.5.2',
 }
 
 // ===========================================================================
