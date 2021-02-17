@@ -316,7 +316,8 @@ local network = {
   },
 
   v1beta1:: {
-    local r(kind, namespace, name) = _r('v1beta1', kind, namespace, name),
+    local r(kind, namespace, name) = _r('networking.k8s.io/v1beta1', kind, 
+      namespace, name),
     r:: r,
 
     ingress:: function(namespace, name, hostname, clusterIssuerName) r(
@@ -381,7 +382,7 @@ local network = {
   # hashedConfigMap:: hashedConfigMap,
   # job:: job,
   
-  version:: '0.5.2',
+  version:: '0.5.3',
 }
 
 // ===========================================================================
