@@ -51,7 +51,7 @@ So it should not hurt to set it to always, as long as the registry is
 reliably available. 
 */
 
-local elName(name) = 'el-' + name;
+local elServiceName(service) = 'el-' + k8s.nameFrom(service);
 
 local prefix(name) = 'g8s-' + name;
 
@@ -91,6 +91,16 @@ local github = {
   bindings:: [{
     name: 'gitrevision',
     value: '$(body.after)'
+  }]
+};
+
+local azurecr = {
+  interceptors:: function(repo, tag) [{
+    cel: {
+      # Restrict to specific repository
+      # https://tekton.dev/docs/triggers/eventlisteners/#cel-interceptors
+      filter: "body.action == 'push' && (body.request.host + '/' + body.target.repository) == '%s' && body.target.tag == '%s'" % [repo, tag],
+    },
   }]
 };
 
@@ -168,8 +178,7 @@ local saEventListener = function(namespace, name = 'event-listener', clusterRole
         "eventlisteners",
         "triggerbindings",
         "triggertemplates",
-        "triggers",
-        # "clustertriggerbindings"
+        "triggers"
       ],
       verbs: ["get", "list", "watch"]
     },
@@ -229,7 +238,7 @@ local saEventListener = function(namespace, name = 'event-listener', clusterRole
 };
 
 local tasks = {
-  build:: function (name, repoUrl, branch, imageRepo, regcredSecretName, serviceAccountName, kanikoCachePvcName, kanikoArgs = []) { spec: { 
+  build:: function (name, repoUrl, branch, imageRepo, regcredSecretName, serviceAccountName, kanikoCachePvcName = null, kanikoArgs = ['--cache=true']) { spec: { 
     # Template parameters definitions. Available in the whole template
     # with $(tt.params)
     params: [],
@@ -245,9 +254,9 @@ local tasks = {
           volumes: [{
               name: 'dockerconfigjson',
               secret: { secretName: regcredSecretName }
-            }, { 
-              name: 'image-cache', persistentVolumeClaim: { claimName: kanikoCachePvcName } // 'kaniko-base-image-cache' 
-            }]
+            }, (if kanikoCachePvcName != null then { 
+              name: 'image-cache', persistentVolumeClaim: { claimName: kanikoCachePvcName }
+            })]
         },
         taskSpec: {
           resources: { inputs: [{ name: 'source', type: 'git' }] },
@@ -256,17 +265,16 @@ local tasks = {
             args: [
               '--context=$(inputs.resources.source.path)',
               '--destination=%s:%s' % [imageRepo, branch],
-              '--cache=true',
               // '--use-new-run'
             ] + kanikoArgs,
             volumeMounts: [{ 
               name: 'dockerconfigjson', 
               mountPath: '/kaniko/.docker/config.json', 
               subPath: '.dockerconfigjson'
-            }, {
+            }, (if kanikoCachePvcName != null then {
               name: 'image-cache',
               mountPath: '/cache'
-            }],
+            })],
             resources: { requests: { memory: '4Gi' }, limits: { memory: '4Gi' } }
           }]
         }
@@ -277,7 +285,7 @@ local tasks = {
   deploy:: function(namespace, name, repoUrl, branch, serviceAccountName) { spec: { 
     # Template parameters definitions. Available in the whole Template
     # with $(tt.params) and bound with event listener bindings
-    params: [],
+    params: [{ name: 'imageVersion', default: ':%s' % [branch] }],
     # Templates for {TaskRun, PiplineRun}s to create when triggered
     resourcetemplates: [{ 
       apiVersion: 'tekton.dev/v1beta1',
@@ -297,13 +305,57 @@ local tasks = {
               '--gc-tag', k8s.nameFrom(namespace),
               // restrict actions to the selected namespace
               '--namespace', k8s.nameFrom(namespace),
+              '--tla-str', 'imageVersion=$(tt.params.imageVersion)',
               '$(inputs.resources.config.path)/' + k8s.nameFrom(namespace) + '/index.k8s.jsonnet'
             ]
           }]
         }
       }
     }]
-  } }
+  } },
+
+  updateBaseImage:: function (name, repoUrl, branch, imageRepo, serviceAccountName) { spec: {
+    local escapedImageRepo = std.strReplace(std.strReplace(imageRepo, '/', '\\/'), '.', '\\.'),
+    local gitImage = 'alpine/git',
+    # Template parameters definitions. Available in the whole template
+    # with $(tt.params)
+    params: [{ name: 'imageVersion', default: ':%s' + branch }],
+    # Templates for {TaskRun, PiplineRun}s to create when triggered
+    resourcetemplates: [{ 
+      apiVersion: 'tekton.dev/v1beta1',
+      kind: 'TaskRun',
+      metadata: { generateName: prefix(name) },
+      spec: {
+        serviceAccountName: serviceAccountName, // k8s.nameFrom($.saCiCd),
+        resources: { inputs: [ gitInput('source', repoUrl, branch) ] }, // '$(tt.params.gitrevision)'
+        workspaces: [{
+          name: 'repo',
+          emptyDir: {}
+        }],
+        taskSpec: {
+          resources: { inputs: [{ name: 'source', type: 'git' }] },
+          workspaces: [{
+            name: 'repo'
+          }],
+          steps: [{
+            image: gitImage,
+            script: |||
+              #!/usr/bin/env ash
+              ln -s ~/.ssh /root/.ssh
+              cd $(workspaces.repo.path)
+              git config --global user.email "office@ddunicorn.com"
+              git config --global user.name "g8s bot"
+              git clone %s --branch %s $(workspaces.repo.path)
+              sed -r "s/(FROM[[:space:]]+%s)(:[[:alnum:]]+)/\\1$(tt.params.imageVersion)/gi" -i Dockerfile
+              git add Dockerfile
+              git commit -m '+ update base image'
+              git push
+            ||| % [repoUrl, branch, escapedImageRepo],
+          }]
+        }
+      }
+    }]
+  } },
 };
 
 local eventListener = function(namespace, name, template, serviceAccountName, interceptors = [], bindings = [])
@@ -328,7 +380,7 @@ local ingress = function(namespace, name, el, hostname, issuerName, path = '/' +
         paths+: [{
           path: path,
           backend: {
-            serviceName: 'el-' + k8s.nameFrom(el),
+            serviceName: elServiceName(el),
             servicePort: 8080,
           }
         }]
@@ -338,14 +390,14 @@ local ingress = function(namespace, name, el, hostname, issuerName, path = '/' +
 };
 
 // https://crontab.guru
-local cron = function(namespace, name, serviceName, schedule = '* * */1 * *', port = 8080) k8s.r('batch/v1beta1', 'CronJob', namespace, name) + {
+local cronjob = function(namespace, name, el, schedule = '0 18 */1 * *', port = 8080) k8s.r('batch/v1beta1', 'CronJob', namespace, name) + {
     spec+: { 
       schedule: schedule,
       jobTemplate: { spec: { template: { spec: {
         containers: [{
           name: 'wget',
           image: 'busybox',
-          args: ['wget', '--spider', '%s.%s.svc.cluster.local:%d' % [serviceName, k8s.nameFrom(namespace), port] ]
+          args: ['wget', '--spider', '%s.%s.svc.cluster.local:%d' % [elServiceName(el), k8s.nameFrom(namespace), port] ]
         }],
         restartPolicy: 'Never'
     } } } } }
@@ -353,6 +405,7 @@ local cron = function(namespace, name, serviceName, schedule = '* * */1 * *', po
 
 {
   github:: github,
+  azurecr:: azurecr,
 
   saTask:: saTask,
   saEventListener:: saEventListener,
@@ -361,5 +414,8 @@ local cron = function(namespace, name, serviceName, schedule = '* * */1 * *', po
   eventListener:: eventListener,
 
   ingress:: ingress,
-  cron:: cron,
+  cronjob:: cronjob,
+
+  elServiceName:: elServiceName,
+  prefix:: prefix,
 }
