@@ -149,7 +149,7 @@ local saTask = function(namespace, name, clusterRoleDeployName, sshPrivateKeySec
   },
 
   crbDeployComponentstatuses: k8s.r('rbac.authorization.k8s.io/v1', 'ClusterRoleBinding', 
-    namespace, prefix(name)) + {
+    namespace, prefix(k8s.nameFrom(namespace) + '-' + name)) + {
     subjects: [{
       kind: 'ServiceAccount',
       name: k8s.nameFrom($.saTask),
@@ -222,7 +222,7 @@ local saEventListener = function(namespace, name = 'event-listener', clusterRole
   },
 
   crbEventListener: k8s.r('rbac.authorization.k8s.io/v1', 'ClusterRoleBinding', 
-    namespace, prefix(name)) + {
+    namespace, prefix(k8s.nameFrom(namespace) + '-' + name)) + {
     subjects: [{
       kind: 'ServiceAccount',
       name: k8s.nameFrom($.saEl),
