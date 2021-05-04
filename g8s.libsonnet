@@ -252,11 +252,13 @@ local tasks = {
         resources: { inputs: [ gitInput('source', repoUrl, branch) ] }, // '$(tt.params.gitrevision)'
         podTemplate: {
           volumes: [{
-              name: 'dockerconfigjson',
-              secret: { secretName: regcredSecretName }
-            }, (if kanikoCachePvcName != null then { 
-              name: 'image-cache', persistentVolumeClaim: { claimName: kanikoCachePvcName }
-            })]
+            name: 'dockerconfigjson',
+            secret: { secretName: regcredSecretName }
+          }]
+          +
+          if kanikoCachePvcName != null then [{ 
+            name: 'image-cache', persistentVolumeClaim: { claimName: kanikoCachePvcName }
+          }] else []
         },
         taskSpec: {
           resources: { inputs: [{ name: 'source', type: 'git' }] },
@@ -271,10 +273,12 @@ local tasks = {
               name: 'dockerconfigjson', 
               mountPath: '/kaniko/.docker/config.json', 
               subPath: '.dockerconfigjson'
-            }, (if kanikoCachePvcName != null then {
+            }]
+            + 
+            if kanikoCachePvcName != null then [{
               name: 'image-cache',
               mountPath: '/cache'
-            })],
+            }] else [],
             resources: { requests: { memory: '4Gi' }, limits: { memory: '4Gi' } }
           }]
         }
