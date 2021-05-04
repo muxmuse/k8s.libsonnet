@@ -350,7 +350,7 @@ local tasks = {
               git config --global user.email "office@ddunicorn.com"
               git config --global user.name "g8s bot"
               git clone %s --branch %s $(workspaces.repo.path)
-              sed -r "s/(FROM[[:space:]]+%s)(:[[:alnum:]]+)/\\1$(tt.params.imageVersion)/gi" -i Dockerfile
+              sed -r "s/(FROM[[:space:]]+%s)((:|@)[[:alnum:].:_-]+)/\\1$(tt.params.imageVersion)/gi" -i Dockerfile
               git add Dockerfile
               git commit -m '+ update base image'
               git push
