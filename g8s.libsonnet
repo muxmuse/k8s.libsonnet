@@ -164,7 +164,7 @@ local saTask = function(namespace, name, clusterRoleDeployName, sshPrivateKeySec
   },
 };
 
-local saEventListener = function(namespace, name = 'event-listener', clusterRoleName, readSecretNames=[]) {
+local saEventListener = function(namespace, name, clusterRoleName, readSecretNames=[]) {
   # ServiceAccount for EventListener
   saEl: k8s.v1.r('ServiceAccount', namespace, prefix(name)),
   
