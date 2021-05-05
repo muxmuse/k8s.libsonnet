@@ -89,6 +89,13 @@ local environmentVariablesFromConfigMap(configMap, names = null) = [
   } for name in (if names != null then names else std.objectFields(configMap.data))
 ];
 
+local environmentVariablesFromObject(obj, names = null) = [
+  {
+    name: name,
+    value: obj[name]
+  } for name in (if names != null then names else std.objectFields(obj))
+];
+
 local nameValuePairsFromDotEnv(dotEnv, valueMap = function(e) e) = std.filterMap(
   function (e) !std.startsWith(e, '#') && std.length(std.split(e, '=')) >= 2, 
   function(e) { 
@@ -348,6 +355,7 @@ local network = {
   volumeFromConfigMap:: volumeFromConfigMap,
   environmentVariablesFromConfigMap:: environmentVariablesFromConfigMap,
   environmentVariablesFromSealedSecret:: environmentVariablesFromSealedSecret,
+  environmentVariablesFromObject:: environmentVariablesFromObject,
   nameValuePairsFromDotEnv:: nameValuePairsFromDotEnv,
   withHashPostfixedName:: withHashPostfixedName,
 
